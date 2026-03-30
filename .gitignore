@@ -1,4 +1,6 @@
 .next
+.next-dev
+.next-dev.lock
 node_modules
 .env
 .env.local
