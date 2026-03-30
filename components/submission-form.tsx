@@ -17,6 +17,18 @@ type FormState = {
   } | null;
 };
 
+type SubmissionApiResponse = {
+  code?: string;
+  dogCount?: number;
+  error?: string;
+  householdName?: string | null;
+  message?: string;
+  totalDachshunds?: number;
+};
+
+const MAX_DACHSHUND_COUNT = 5;
+const COUNT_OPTIONS = [0, 1, 2, 3, 4, 5];
+
 function createDogDrafts(count: number, previous: DogDraft[] = []) {
   return Array.from({ length: count }, (_, index) => ({
     file: previous[index]?.file ?? null,
@@ -24,11 +36,60 @@ function createDogDrafts(count: number, previous: DogDraft[] = []) {
   }));
 }
 
+function createEmptyFormState(): FormState {
+  return { error: null, success: null };
+}
+
+function getSubmitErrorMessage(status: number, payload?: SubmissionApiResponse) {
+  const fallbackError =
+    status === 413
+      ? "That photo is too large. Please use a file under 4 MB."
+      : payload?.code === "missing_env"
+        ? "The server is missing a required setting. Please try again later."
+        : payload?.code === "upload_failed"
+          ? "We couldn't upload that photo right now. Please try again."
+          : payload?.code === "db_failed"
+            ? "We couldn't save that entry right now. Please try again."
+            : "We couldn't save that entry.";
+
+  return payload?.error ?? fallbackError;
+}
+
+async function readSubmissionResponse(response: Response): Promise<SubmissionApiResponse | undefined> {
+  const raw = await response.text();
+
+  if (!raw) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(raw) as SubmissionApiResponse;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildSubmissionFormData(householdName: string, count: number, dogs: DogDraft[]) {
+  const formData = new FormData();
+  formData.set("householdName", householdName);
+  formData.set("dachshundCount", String(count));
+
+  dogs.forEach((dog, index) => {
+    formData.set(`dogName-${index}`, dog.name.trim());
+
+    if (dog.file) {
+      formData.set(`dogPhoto-${index}`, dog.file);
+    }
+  });
+
+  return formData;
+}
+
 export function SubmissionForm() {
   const [count, setCount] = useState(0);
   const [householdName, setHouseholdName] = useState("");
   const [dogs, setDogs] = useState<DogDraft[]>(() => createDogDrafts(0));
-  const [state, setState] = useState<FormState>({ error: null, success: null });
+  const [state, setState] = useState<FormState>(createEmptyFormState);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [typedTotal, setTypedTotal] = useState(0);
   const [isPending, startTransition] = useTransition();
@@ -63,7 +124,7 @@ export function SubmissionForm() {
   }, [state.success]);
 
   function clearFormState() {
-    setState({ error: null, success: null });
+    setState(createEmptyFormState());
   }
 
   function updateDog(index: number, updates: Partial<DogDraft>) {
@@ -79,7 +140,7 @@ export function SubmissionForm() {
     setHouseholdName("");
     setCount(0);
     setDogs(createDogDrafts(0));
-    setState({ error: null, success: null });
+    setState(createEmptyFormState());
     setDragIndex(null);
     setTypedTotal(0);
   }
@@ -113,17 +174,7 @@ export function SubmissionForm() {
       return;
     }
 
-    const formData = new FormData();
-    formData.set("householdName", householdName);
-    formData.set("dachshundCount", String(count));
-
-    dogs.forEach((dog, index) => {
-      formData.set(`dogName-${index}`, dog.name.trim());
-
-      if (dog.file) {
-        formData.set(`dogPhoto-${index}`, dog.file);
-      }
-    });
+    const formData = buildSubmissionFormData(householdName, count, dogs);
 
     startTransition(async () => {
       try {
@@ -131,47 +182,11 @@ export function SubmissionForm() {
           method: "POST",
           body: formData,
         });
-        const raw = await response.text();
-        let payload:
-          | {
-              code?: string;
-              dogCount?: number;
-              error?: string;
-              householdName?: string | null;
-              message?: string;
-              totalDachshunds?: number;
-            }
-          | undefined;
-
-        if (raw) {
-          try {
-            payload = JSON.parse(raw) as {
-              code?: string;
-              dogCount?: number;
-              error?: string;
-              householdName?: string | null;
-              message?: string;
-              totalDachshunds?: number;
-            };
-          } catch {
-            payload = undefined;
-          }
-        }
+        const payload = await readSubmissionResponse(response);
 
         if (!response.ok) {
-          const fallbackError =
-            response.status === 413
-              ? "That photo is too large. Please use a file under 4 MB."
-              : payload?.code === "missing_env"
-                ? "The server is missing a required setting. Please try again later."
-                : payload?.code === "upload_failed"
-                  ? "We couldn't upload that photo right now. Please try again."
-                  : payload?.code === "db_failed"
-                    ? "We couldn't save that entry right now. Please try again."
-                    : "We couldn't save that entry.";
-
           setState({
-            error: payload?.error ?? fallbackError,
+            error: getSubmitErrorMessage(response.status, payload),
             success: null,
           });
           return;
@@ -267,10 +282,10 @@ export function SubmissionForm() {
             onChange={(event) => {
               const nextValue = Number(event.target.value);
               clearFormState();
-              setCount(Number.isNaN(nextValue) ? 0 : Math.min(5, Math.max(0, nextValue)));
+              setCount(Number.isNaN(nextValue) ? 0 : Math.min(MAX_DACHSHUND_COUNT, Math.max(0, nextValue)));
             }}
           >
-            {[0, 1, 2, 3, 4, 5].map((value) => (
+            {COUNT_OPTIONS.map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>

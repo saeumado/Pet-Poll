@@ -16,6 +16,7 @@ export function getPublicEnv() {
 }
 
 export function getServerEnv() {
+  // Keep sensitive values server-only. They are used by server components and route handlers only.
   return {
     supabaseUrl: requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
     serviceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
