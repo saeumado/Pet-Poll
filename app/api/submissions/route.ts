@@ -143,6 +143,7 @@ export async function POST(request: Request) {
       const { error: dogError } = await supabase.from("dogs").insert(dogRows);
 
       if (dogError) {
+        // Remove the parent row if child rows fail so the admin dashboard never shows a half-saved submission.
         const { error: deleteHouseholdError } = await supabase.from("households").delete().eq("id", householdId);
 
         if (deleteHouseholdError) {
@@ -180,6 +181,7 @@ export async function POST(request: Request) {
           : "Your submission is complete.",
       }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
+      // If a later step fails, delete uploaded files so storage and database state stay aligned.
       if (uploadedPaths.length > 0) {
         const { error: cleanupError } = await supabase.storage.from(bucket).remove(uploadedPaths);
 

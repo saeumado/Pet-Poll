@@ -1,34 +1,134 @@
 # Hot Dog Poll
 
-A simple Next.js web app for collecting dachshund household submissions and reviewing them in a private admin dashboard.
+Hot Dog Poll is a lightweight mobile-first web app for collecting dachshund photos, reviewing them in a private admin area, and publishing finished dog cards in a public gallery.
 
-## What it does
+The app is designed for quick use on phones. The main user comes from WhatsApp, opens the link, fills in a short form, uploads photos, and finishes fast.
 
-- Public form with optional household name, dachshund count, and one dog name/photo per dachshund
-- Clean success state with a live overall dachshund count
-- Private admin dashboard protected by a shared password
-- Running totals for households, dachshunds, and saved photos
-- CSV export of all submissions
-- Individual photo download links for each dog
-- Supabase Postgres for records and Supabase Storage for images
+## Product in simple words
 
-## Stack
+This product has four main parts:
 
-- Next.js App Router
-- React + TypeScript
-- Supabase Postgres
-- Supabase Storage
-- Vercel-ready environment configuration
+1. A public home page where a person enters their household name, selects how many dachshunds they have, and uploads one photo for each dog.
+2. A submission API that checks the form data, uploads the photos, saves the data in Supabase, and returns the latest total count.
+3. A private admin page where the team can review submissions, download original photos, export CSV data, and manage gallery cards.
+4. A public gallery page where finished card images can be viewed and downloaded.
+
+## What is implemented now
+
+- Public dog photo submission flow
+- Private admin login
+- Admin dashboard with totals and submission review
+- Photo download for admins
+- CSV export
+- Public gallery for finished card images
+- Gallery upload and visibility controls inside admin
+
+## What is not implemented as a live feature
+
+The database includes fields for cartoon or AI-related image work, such as `cartoon_storage_path` and `cartoon_content_type`.
+
+Those fields suggest planned future expansion, but this repo does not currently show a live user-facing AI image generation pipeline running inside the app itself. The current live product is an upload, review, and gallery system.
+
+## Who this is for
+
+- Dachshund owners submitting dog photos
+- The internal team managing entries
+- Future developers who need to understand or extend the project
+
+## User flow
+
+1. User opens `/`.
+2. User optionally enters a household name.
+3. User selects how many dachshunds they have.
+4. User enters each dog name and uploads each photo.
+5. The form submits to `/api/submissions`.
+6. The server validates the data, uploads photos, saves records, and returns the updated total.
+7. The user sees a simple success screen.
+
+## Admin flow
+
+1. Admin opens `/admin/login`.
+2. Admin enters the shared password.
+3. Admin lands on `/admin`.
+4. Admin reviews households, dogs, totals, and uploaded photos.
+5. Admin can export CSV data.
+6. Admin can download original photos.
+7. Admin can upload finished gallery cards and choose whether each card is published or hidden.
+
+## How the data moves
+
+1. The browser sends form data and photo files to the Next.js route handler.
+2. The route handler validates the payload with Zod.
+3. The server uploads images to Supabase Storage.
+4. The server writes household and dog rows into Supabase Postgres.
+5. The admin page reads those rows back from Supabase.
+6. Signed URLs are created so private images can be previewed safely.
+7. The gallery page reads published gallery card records and shows the final images.
+
+## Frontend, backend, and services
+
+### Frontend
+
+- Next.js App Router for pages and routing
+- React for UI components
+- TypeScript for safer code
+- CSS in `app/globals.css` for styling
+
+The frontend handles the form, success state, admin layout, and gallery screens.
+
+### Backend
+
+- Next.js route handlers in `app/api/*`
+
+The backend handles:
+
+- validation
+- file upload
+- database writes
+- CSV export
+- admin-only actions
+- image download responses
+
+### Database and storage
+
+- Supabase Postgres stores households, dogs, and gallery card records
+- Supabase Storage stores uploaded images and gallery assets
+
+### Validation
+
+- Zod checks that the form is valid before the server saves anything
+
+This stops common bad input early, such as missing names, missing photos, wrong file types, or files larger than 4 MB.
+
+### Admin protection
+
+- Shared password
+- Server-side admin session helpers
+
+This keeps the admin dashboard private without adding a full user account system.
+
+## Skills and tools used
+
+These are the main technologies and what they do in simple terms:
+
+- `Next.js`: runs the website pages and the backend route handlers in one project
+- `React`: builds the page components and form UI
+- `TypeScript`: helps catch mistakes before runtime
+- `Supabase`: stores the data and image files
+- `Zod`: checks that the submitted form is valid
+- `PowerShell dev script`: starts the local dev server safely and avoids stale local build output
 
 ## Local setup
 
-1. Install dependencies:
+1. Install dependencies.
 
 ```powershell
 npm.cmd install
 ```
 
-2. Copy `.env.example` to `.env.local` and fill in:
+2. Copy `.env.example` to `.env.local`.
+
+3. Fill in these environment variables:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -37,41 +137,49 @@ npm.cmd install
 - `ADMIN_PASSWORD`
 - `ADMIN_SESSION_SECRET`
 
-3. In Supabase SQL Editor, run [`supabase/schema.sql`](/C:/Users/steve/Desktop/ai%20project/13%20pet%20poll%20pic/supabase/schema.sql).
+4. In Supabase SQL Editor, run [`supabase/schema.sql`](/C:/Users/steve/Desktop/ai%20project/13%20pet%20poll%20pic/supabase/schema.sql).
 
-4. Confirm your storage bucket name matches `SUPABASE_BUCKET`.
+5. Confirm the bucket name in Supabase matches `SUPABASE_BUCKET`.
 
-5. Start the app:
+6. Start the dev server.
 
 ```powershell
 npm.cmd run dev
 ```
 
-6. Open:
+7. Open:
 
-- `/` for the public submission form
-- `/admin/login` for the admin dashboard login
+- `/` for the public form
+- `/admin/login` for the private admin area
+- `/cards` for the public gallery
 
 ## Supabase notes
 
-- The app uses the service role key on the server for inserts, reads, export generation, and photo downloads.
-- Uploaded dog photos are stored in the configured storage bucket under household-specific folders.
-- The included SQL enables row level security and grants access to the service role.
+- The service role key is used on the server only
+- Dog photos are stored in the configured storage bucket
+- Gallery images are also stored in the same bucket unless a direct path or URL is used
+- Row level security is enabled and the service role is allowed to manage the records
 
-## Deployment on Vercel
+## Deployment notes
 
-1. Create a new Vercel project from this folder or repository.
-2. Add the same environment variables from `.env.local` in Vercel Project Settings.
-3. Deploy the app.
-4. Keep the service role key server-only. Do not expose it as a `NEXT_PUBLIC_` variable.
+1. Create a Vercel project from this repo.
+2. Add the same environment variables from `.env.local`.
+3. Deploy.
+4. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
+
+## Build and follow-up notes
+
+See [`BUILD_NOTES.md`](/C:/Users/steve/Desktop/ai%20project/13%20pet%20poll%20pic/BUILD_NOTES.md) for the build errors that happened during development, what caused them, how they were fixed, and what to avoid next time.
 
 ## Verification checklist
 
 - Submit one-dog and multi-dog households
-- Keep uploaded photos under 4 MB to stay within the current Vercel request limit
+- Keep uploads under 4 MB
 - Confirm uploaded photos appear in the configured Supabase bucket
-- Confirm the success state shows the updated global dachshund count
-- Confirm the admin password gate blocks unauthenticated access
-- Confirm totals match the submitted entries
+- Confirm the success state shows the updated total dachshund count
+- Confirm admin login blocks unauthenticated access
+- Confirm the admin totals match the submitted entries
 - Confirm CSV export downloads correctly
-- Confirm photo downloads work from the admin view
+- Confirm admin photo downloads work
+- Confirm published gallery cards appear on `/cards`
+- Confirm gallery downloads work
