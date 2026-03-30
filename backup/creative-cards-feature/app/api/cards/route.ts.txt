@@ -1,0 +1,47 @@
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import {
+  CREATIVE_CARD_COOKIE,
+  createCreativeCardVisitorToken,
+  getCreativeCardsSnapshot,
+} from "@/lib/creative-cards";
+
+function buildCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  };
+}
+
+export async function GET() {
+  try {
+    const cookieStore = await cookies();
+    const existingToken = cookieStore.get(CREATIVE_CARD_COOKIE)?.value ?? null;
+    const visitorToken = existingToken ?? createCreativeCardVisitorToken();
+    const cards = await getCreativeCardsSnapshot(visitorToken);
+
+    const response = NextResponse.json(
+      { success: true, cards },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+
+    if (!existingToken) {
+      response.cookies.set(CREATIVE_CARD_COOKIE, visitorToken, buildCookieOptions());
+    }
+
+    return response;
+  } catch (error) {
+    console.error("[cards] read_failed", error);
+    return NextResponse.json(
+      { code: "unexpected_error", error: "We couldn't load the cards right now." },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+}

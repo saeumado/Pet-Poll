@@ -1,0 +1,126 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import Image from "next/image";
+import type { CreativeCard } from "@/lib/creative-cards";
+
+type CardsGalleryProps = {
+  initialCards: CreativeCard[];
+};
+
+type VoteResponse = {
+  success: true;
+  card: {
+    slug: string;
+    likeCount: number;
+    hasLiked: boolean;
+  };
+};
+
+const errorMessages: Record<string, string> = {
+  invalid_card: "That card could not be found.",
+  vote_failed: "We couldn't save your vote right now. Please try again.",
+  missing_env: "The voting service is missing a required setting right now.",
+  schema_missing: "Voting is not ready yet because the gallery database tables still need to be created.",
+  unexpected_error: "We couldn't save your vote right now. Please try again.",
+};
+
+export function CardsGallery({ initialCards }: CardsGalleryProps) {
+  const [cards, setCards] = useState(initialCards);
+  const [isPending, startTransition] = useTransition();
+  const [activeSlug, setActiveSlug] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  function handleVote(slug: string) {
+    setErrorMessage(null);
+    setActiveSlug(slug);
+
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/cards/vote", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ slug }),
+        });
+
+        const payload = (await response.json().catch(() => null)) as
+          | VoteResponse
+          | { error?: string; code?: string }
+          | null;
+
+        if (!response.ok || !payload || !("success" in payload)) {
+          const code = payload && "code" in payload ? payload.code ?? "" : "";
+          setErrorMessage(errorMessages[code] ?? "We couldn't save your vote right now. Please try again.");
+          return;
+        }
+
+        setCards((currentCards) =>
+          currentCards.map((card) =>
+            card.slug === payload.card.slug
+              ? {
+                  ...card,
+                  likeCount: payload.card.likeCount,
+                  hasLiked: payload.card.hasLiked,
+                }
+              : card,
+          ),
+        );
+      } catch (error) {
+        console.error("[cards] vote_request_failed", error);
+        setErrorMessage("We couldn't save your vote right now. Please try again.");
+      } finally {
+        setActiveSlug(null);
+      }
+    });
+  }
+
+  return (
+    <div className="cardsGrid" aria-label="Creative dog cards">
+      {cards.map((card) => {
+        const voteDisabled = card.hasLiked || (isPending && activeSlug === card.slug);
+
+        return (
+          <article key={card.slug} className="cardsItem panel">
+            <div className="cardsImageWrap">
+              <Image
+                className="cardsImage"
+                src={card.imagePath}
+                alt={`${card.name} creative card`}
+                width={1200}
+                height={1600}
+                sizes="(max-width: 720px) 100vw, (max-width: 1120px) 50vw, 33vw"
+              />
+
+              <button
+                type="button"
+                className={`cardsHeartBadge${card.hasLiked ? " cardsHeartBadgeLiked" : ""}`}
+                onClick={() => handleVote(card.slug)}
+                disabled={voteDisabled}
+                aria-pressed={card.hasLiked}
+                aria-label={card.hasLiked ? `${card.name} already liked` : `Like ${card.name}`}
+              >
+                <span className="cardsHeartIcon" aria-hidden="true">{"\u2665"}</span>
+                <span className="cardsHeartCount">{card.likeCount}</span>
+              </button>
+            </div>
+
+            <div className="cardsItemBody">
+              <div>
+                <h2 className="cardsName">{card.name}</h2>
+                <p className="cardsMeta">Tap the heart once to vote for your favorite card, then download it below.</p>
+              </div>
+
+              <a className="button buttonBright cardsDownload" href={card.imagePath} download>
+                Download card
+              </a>
+            </div>
+          </article>
+        );
+      })}
+
+      {errorMessage ? <p className="errorText cardsError">{errorMessage}</p> : null}
+    </div>
+  );
+}

@@ -1,0 +1,128 @@
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase";
+import {
+  CREATIVE_CARD_COOKIE,
+  CreativeCardsError,
+  createCreativeCardVisitorToken,
+  getCreativeCardBySlug,
+  getCreativeCardLikeCount,
+} from "@/lib/creative-cards";
+
+class VoteError extends Error {
+  code: string;
+  status: number;
+  userMessage: string;
+
+  constructor(code: string, status: number, userMessage: string, internalMessage?: string) {
+    super(internalMessage ?? userMessage);
+    this.code = code;
+    this.status = status;
+    this.userMessage = userMessage;
+  }
+}
+
+function buildCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  };
+}
+
+function jsonError(error: VoteError) {
+  return NextResponse.json(
+    {
+      code: error.code,
+      error: error.userMessage,
+    },
+    {
+      status: error.status,
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json().catch(() => null)) as { slug?: string } | null;
+    const slug = body?.slug?.trim();
+
+    if (!slug) {
+      return jsonError(new VoteError("invalid_card", 400, "That card could not be found."));
+    }
+
+    const cookieStore = await cookies();
+    const existingToken = cookieStore.get(CREATIVE_CARD_COOKIE)?.value ?? null;
+    const visitorToken = existingToken ?? createCreativeCardVisitorToken();
+
+    let card;
+
+    try {
+      card = await getCreativeCardBySlug(slug);
+    } catch (error) {
+      console.error("[cards] load_card_failed", error);
+      const code = error instanceof CreativeCardsError && error.code === "schema_missing" ? "schema_missing" : "vote_failed";
+      const message =
+        code === "schema_missing"
+          ? "Voting is not ready yet because the gallery tables still need to be created."
+          : "The voting service is unavailable right now.";
+      return jsonError(new VoteError(code, 500, message));
+    }
+
+    if (!card) {
+      return jsonError(new VoteError("invalid_card", 404, "That card could not be found."));
+    }
+
+    const supabase = createServerSupabaseClient();
+    const { error: voteError } = await supabase.from("creative_card_votes").insert({
+      card_id: card.id,
+      voter_token: visitorToken,
+    });
+
+    if (voteError && voteError.code !== "23505") {
+      throw new VoteError(
+        "vote_failed",
+        500,
+        "We couldn't save your vote right now. Please try again.",
+        `Vote insert failed for ${slug}: ${voteError.message}`,
+      );
+    }
+
+    const likeCount = await getCreativeCardLikeCount(card.id);
+
+    const response = NextResponse.json(
+      {
+        success: true,
+        card: {
+          slug: card.slug,
+          likeCount,
+          hasLiked: true,
+        },
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+
+    if (!existingToken) {
+      response.cookies.set(CREATIVE_CARD_COOKIE, visitorToken, buildCookieOptions());
+    }
+
+    return response;
+  } catch (error) {
+    if (error instanceof VoteError) {
+      console.error(`[cards] ${error.code}`, error.message);
+      return jsonError(error);
+    }
+
+    console.error("[cards] unexpected_vote_error", error);
+    return jsonError(new VoteError("unexpected_error", 500, "We couldn't save your vote right now. Please try again."));
+  }
+}

@@ -1,0 +1,190 @@
+import { randomUUID } from "crypto";
+import { createServerSupabaseClient } from "@/lib/supabase";
+import { slugify } from "@/lib/utils";
+
+export const CREATIVE_CARD_COOKIE = "creative-card-voter";
+
+const staticCardFiles = [
+  "Meiji1.png",
+  "Anya1.png",
+  "Blu1.png",
+  "Cap1.png",
+  "Mio1.png",
+  "Mayo.png",
+  "Jadior1.png",
+  "Brown1.png",
+  "Dean.png",
+  "Pep.png",
+  "Meatball.png",
+  "Noodle1.png",
+  "Mousses1.png",
+  "Haru1.png",
+] as const;
+
+export type CreativeCard = {
+  id: string;
+  slug: string;
+  name: string;
+  imagePath: string;
+  likeCount: number;
+  hasLiked: boolean;
+};
+
+export class CreativeCardsError extends Error {
+  code: "schema_missing" | "seed_failed" | "load_failed" | "vote_failed";
+
+  constructor(code: CreativeCardsError["code"], message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+function formatCardName(fileName: string) {
+  return fileName
+    .replace(/\.[^.]+$/, "")
+    .replace(/\d+$/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getStaticCards() {
+  return staticCardFiles.map((fileName, index) => ({
+    slug: slugify(fileName.replace(/\.[^.]+$/, "").replace(/\d+$/, "")),
+    display_name: formatCardName(fileName),
+    image_path: `/cards/${fileName}`,
+    sort_order: index,
+  }));
+}
+
+export function createCreativeCardVisitorToken() {
+  return randomUUID();
+}
+
+export async function ensureCreativeCardsSeeded() {
+  const supabase = createServerSupabaseClient();
+  const staticCards = getStaticCards();
+
+  const { error } = await supabase.from("creative_cards").upsert(staticCards, {
+    onConflict: "slug",
+    ignoreDuplicates: false,
+  });
+
+  if (error) {
+    const code = error.message.includes("Could not find the table") ? "schema_missing" : "seed_failed";
+    throw new CreativeCardsError(code, `Failed to seed creative cards: ${error.message}`);
+  }
+
+  const { data: existingCards, error: existingError } = await supabase.from("creative_cards").select("slug");
+
+  if (existingError) {
+    const code = existingError.message.includes("Could not find the table") ? "schema_missing" : "load_failed";
+    throw new CreativeCardsError(code, `Failed to load existing creative cards: ${existingError.message}`);
+  }
+
+  const staticSlugs = new Set(staticCards.map((card) => card.slug));
+  const staleSlugs = (existingCards ?? [])
+    .map((card) => card.slug)
+    .filter((slug) => !staticSlugs.has(slug));
+
+  if (staleSlugs.length === 0) {
+    return;
+  }
+
+  const { error: deleteError } = await supabase.from("creative_cards").delete().in("slug", staleSlugs);
+
+  if (deleteError) {
+    throw new CreativeCardsError("seed_failed", `Failed to remove old creative cards: ${deleteError.message}`);
+  }
+}
+
+export async function getCreativeCardsSnapshot(voterToken?: string | null): Promise<CreativeCard[]> {
+  await ensureCreativeCardsSeeded();
+
+  const supabase = createServerSupabaseClient();
+  const { data: cards, error: cardsError } = await supabase
+    .from("creative_cards")
+    .select("id, slug, display_name, image_path, sort_order")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (cardsError) {
+    const code = cardsError.message.includes("Could not find the table") ? "schema_missing" : "load_failed";
+    throw new CreativeCardsError(code, `Failed to load creative cards: ${cardsError.message}`);
+  }
+
+  let likedCardIds = new Set<string>();
+
+  if (voterToken) {
+    const { data: likedVotes, error: likedError } = await supabase
+      .from("creative_card_votes")
+      .select("card_id")
+      .eq("voter_token", voterToken);
+
+    if (likedError) {
+      const code = likedError.message.includes("Could not find the table") ? "schema_missing" : "load_failed";
+      throw new CreativeCardsError(code, `Failed to load creative card likes: ${likedError.message}`);
+    }
+
+    likedCardIds = new Set((likedVotes ?? []).map((vote) => vote.card_id));
+  }
+
+  const cardsWithCounts = await Promise.all(
+    (cards ?? []).map(async (card) => {
+      const { count, error: countError } = await supabase
+        .from("creative_card_votes")
+        .select("id", { count: "exact", head: true })
+        .eq("card_id", card.id);
+
+      if (countError) {
+        const code = countError.message.includes("Could not find the table") ? "schema_missing" : "load_failed";
+        throw new CreativeCardsError(code, `Failed to load creative card count for ${card.slug}: ${countError.message}`);
+      }
+
+      return {
+        id: card.id,
+        slug: card.slug,
+        name: card.display_name,
+        imagePath: card.image_path,
+        likeCount: count ?? 0,
+        hasLiked: likedCardIds.has(card.id),
+      } satisfies CreativeCard;
+    }),
+  );
+
+  return cardsWithCounts;
+}
+
+export async function getCreativeCardBySlug(slug: string) {
+  await ensureCreativeCardsSeeded();
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("creative_cards")
+    .select("id, slug, display_name, image_path")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) {
+    const code = error.message.includes("Could not find the table") ? "schema_missing" : "load_failed";
+    throw new CreativeCardsError(code, `Failed to load creative card ${slug}: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function getCreativeCardLikeCount(cardId: string) {
+  const supabase = createServerSupabaseClient();
+  const { count, error } = await supabase
+    .from("creative_card_votes")
+    .select("id", { count: "exact", head: true })
+    .eq("card_id", cardId);
+
+  if (error) {
+    const code = error.message.includes("Could not find the table") ? "schema_missing" : "vote_failed";
+    throw new CreativeCardsError(code, `Failed to count creative card likes: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
