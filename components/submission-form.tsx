@@ -158,7 +158,11 @@ export function SubmissionForm() {
 
         if (!response.ok) {
           setState({
-            error: payload?.error ?? "We couldn't save that entry.",
+            error:
+              payload?.error ??
+              (response.status === 413
+                ? "That photo is too large. Please use a file under 4 MB."
+                : "We couldn't save that entry."),
             success: null,
           });
           return;
@@ -308,7 +312,7 @@ export function SubmissionForm() {
                 onDrop={(event) => handleDrop(index, event)}
               >
                 <span className="uploadText">{dog.file ? dog.file.name : "Upload your dachshund photo"}</span>
-                <span className="uploadHint">Accepted formats: JPEG, PNG, or WebP. Max size: 5 MB.</span>
+                <span className="uploadHint">Accepted formats: JPEG, PNG, or WebP. Max size: 4 MB.</span>
                 <input
                   key={`${index}-${dog.file?.name ?? "empty"}`}
                   className="fileInput"

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-export const MAX_FILE_SIZE = 5 * 1024 * 1024;
+export const MAX_FILE_SIZE = 4 * 1024 * 1024;
 
 export const adminLoginSchema = z.object({
   password: z.string().min(1, "Enter the admin password."),
@@ -16,7 +16,7 @@ export const dogInputSchema = z.object({
   file: z
     .instanceof(File)
     .refine((file) => file.size > 0, "Each dachshund needs a photo.")
-    .refine((file) => file.size <= MAX_FILE_SIZE, "Each photo must be 5 MB or smaller.")
+    .refine((file) => file.size <= MAX_FILE_SIZE, "Each photo must be 4 MB or smaller.")
     .refine((file) => ACCEPTED_TYPES.includes(file.type), "Photos must be JPG, PNG, or WebP."),
 });
 

@@ -68,6 +68,7 @@ npm.cmd run dev
 ## Verification checklist
 
 - Submit one-dog and multi-dog households
+- Keep uploaded photos under 4 MB to stay within the current Vercel request limit
 - Confirm uploaded photos appear in the configured Supabase bucket
 - Confirm the success state shows the updated global dachshund count
 - Confirm the admin password gate blocks unauthenticated access
