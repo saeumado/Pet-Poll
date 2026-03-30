@@ -46,3 +46,26 @@ export const submissionSchema = z
 export const adminPhotoSchema = z.object({
   path: z.string().min(1, "Missing photo path."),
 });
+
+export const galleryCardUploadSchema = z.object({
+  isPublished: z.boolean(),
+  files: z
+    .array(
+      z
+        .instanceof(File)
+        .refine((file) => file.size > 0, "Choose an image to upload.")
+        .refine((file) => file.size <= MAX_FILE_SIZE, "Each image must be 4 MB or smaller.")
+        .refine((file) => ACCEPTED_TYPES.includes(file.type), "Images must be JPG, PNG, or WebP."),
+    )
+    .min(1, "Choose at least one image to upload."),
+});
+
+export const galleryCardUpdateSchema = z.object({
+  cardId: z.string().uuid("Invalid gallery card id."),
+  name: z
+    .string()
+    .trim()
+    .min(1, "Enter a card name.")
+    .max(80, "Card names must stay under 80 characters."),
+  isPublished: z.boolean(),
+});

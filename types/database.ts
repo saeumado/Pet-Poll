@@ -70,6 +70,61 @@ export interface Database {
           }
         ];
       };
+      gallery_cards: {
+        Row: {
+          created_at: string;
+          id: string;
+          image_path: string;
+          is_published: boolean;
+          name: string;
+          sort_order: number;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          image_path: string;
+          is_published?: boolean;
+          name: string;
+          sort_order?: number;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          image_path?: string;
+          is_published?: boolean;
+          name?: string;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
+      gallery_card_votes: {
+        Row: {
+          created_at: string;
+          gallery_card_id: string;
+          id: string;
+          voter_token: string;
+        };
+        Insert: {
+          created_at?: string;
+          gallery_card_id: string;
+          id?: string;
+          voter_token: string;
+        };
+        Update: {
+          created_at?: string;
+          gallery_card_id?: string;
+          id?: string;
+          voter_token?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "gallery_card_votes_gallery_card_id_fkey";
+            columns: ["gallery_card_id"];
+            referencedRelation: "gallery_cards";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

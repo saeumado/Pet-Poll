@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SubmissionForm } from "@/components/submission-form";
 
 export default function HomePage() {
@@ -20,6 +21,12 @@ export default function HomePage() {
         </header>
 
         <SubmissionForm />
+
+        <p className="simpleGalleryLinkRow">
+          <Link className="simpleGalleryLink" href="/cards">
+            Go to gallery
+          </Link>
+        </p>
       </section>
     </main>
   );

@@ -3,6 +3,8 @@ import { createServerSupabaseClient } from "@/lib/supabase";
 import { getServerEnv } from "@/lib/env";
 import { slugify } from "@/lib/utils";
 
+export const GALLERY_CARD_VOTER_COOKIE = "gallery-card-voter";
+
 export type GalleryCard = {
   id: string;
   name: string;
@@ -10,6 +12,8 @@ export type GalleryCard = {
   downloadHref: string;
   isPublished: boolean;
   createdAt: string;
+  likeCount: number;
+  hasLiked: boolean;
 };
 
 type GalleryCardRow = {
@@ -20,6 +24,14 @@ type GalleryCardRow = {
   name: string;
   sort_order: number;
 };
+
+type GalleryCardVoteRow = {
+  gallery_card_id: string;
+};
+
+function createVoteReadFallbackContext(message: string) {
+  return `[gallery-cards] likes_unavailable ${message}`;
+}
 
 function formatCardName(fileName: string) {
   return fileName
@@ -64,10 +76,55 @@ async function hydrateCard(row: GalleryCardRow): Promise<GalleryCard> {
     downloadHref: mapDownloadHref(row.id),
     isPublished: row.is_published,
     createdAt: row.created_at,
+    likeCount: 0,
+    hasLiked: false,
   };
 }
 
-export async function listPublishedGalleryCards() {
+export function createGalleryCardVisitorToken() {
+  return randomUUID();
+}
+
+async function getGalleryCardVoteCounts(cardIds: string[]) {
+  if (cardIds.length === 0) {
+    return new Map<string, number>();
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.from("gallery_card_votes").select("gallery_card_id").in("gallery_card_id", cardIds);
+
+  if (error) {
+    throw new Error(`Failed to load gallery card votes: ${error.message}`);
+  }
+
+  const counts = new Map<string, number>();
+
+  for (const vote of (data ?? []) as GalleryCardVoteRow[]) {
+    counts.set(vote.gallery_card_id, (counts.get(vote.gallery_card_id) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
+async function getLikedGalleryCardIds(voterToken?: string | null) {
+  if (!voterToken) {
+    return new Set<string>();
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("gallery_card_votes")
+    .select("gallery_card_id")
+    .eq("voter_token", voterToken);
+
+  if (error) {
+    throw new Error(`Failed to load gallery card likes: ${error.message}`);
+  }
+
+  return new Set(((data ?? []) as GalleryCardVoteRow[]).map((vote) => vote.gallery_card_id));
+}
+
+export async function listPublishedGalleryCards(voterToken?: string | null) {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("gallery_cards")
@@ -79,7 +136,26 @@ export async function listPublishedGalleryCards() {
     throw new Error(`Failed to load gallery cards: ${error.message}`);
   }
 
-  return Promise.all(((data ?? []) as GalleryCardRow[]).map(hydrateCard));
+  const rows = (data ?? []) as GalleryCardRow[];
+  const cards = await Promise.all(rows.map(hydrateCard));
+  let voteCounts = new Map<string, number>();
+  let likedCardIds = new Set<string>();
+
+  try {
+    [voteCounts, likedCardIds] = await Promise.all([
+      getGalleryCardVoteCounts(rows.map((row) => row.id)),
+      getLikedGalleryCardIds(voterToken),
+    ]);
+  } catch (voteReadError) {
+    const message = voteReadError instanceof Error ? voteReadError.message : "Unknown vote read failure.";
+    console.warn(createVoteReadFallbackContext(message));
+  }
+
+  return cards.map((card) => ({
+    ...card,
+    likeCount: voteCounts.get(card.id) ?? 0,
+    hasLiked: likedCardIds.has(card.id),
+  }));
 }
 
 export async function listAdminGalleryCards() {
@@ -175,4 +251,37 @@ export async function getPublishedGalleryCardById(cardId: string) {
   }
 
   return data;
+}
+
+export async function voteForGalleryCard(input: { cardId: string; voterToken: string }) {
+  const supabase = createServerSupabaseClient();
+  const card = await getPublishedGalleryCardById(input.cardId);
+
+  if (!card) {
+    return null;
+  }
+
+  const { error: voteError } = await supabase.from("gallery_card_votes").insert({
+    gallery_card_id: input.cardId,
+    voter_token: input.voterToken,
+  });
+
+  if (voteError && voteError.code !== "23505") {
+    throw new Error(`Failed to save gallery vote: ${voteError.message}`);
+  }
+
+  const { count, error: countError } = await supabase
+    .from("gallery_card_votes")
+    .select("id", { count: "exact", head: true })
+    .eq("gallery_card_id", input.cardId);
+
+  if (countError) {
+    throw new Error(`Failed to count gallery votes: ${countError.message}`);
+  }
+
+  return {
+    cardId: input.cardId,
+    likeCount: count ?? 0,
+    hasLiked: true,
+  };
 }
