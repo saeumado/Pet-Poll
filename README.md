@@ -162,10 +162,54 @@ npm.cmd run dev
 
 ## Deployment notes
 
+This repo is intended to be deployed with the Vercel MCP from Codex chat.
+
+### Default deploy workflow
+
+Use preview deployments by default. Only deploy to production when you explicitly want the live site updated.
+
+Current workspace assumptions:
+
+- the local `vercel` CLI is not installed
+- this repo may not have a local `.vercel` link yet
+- MCP-driven deploys are the preferred path
+
+### Reusable deploy prompts
+
+Ask Codex one of these from this project:
+
+- `Deploy this project to Vercel`
+- `Create a preview deploy for this repo`
+- `Deploy this to production on Vercel`
+- `Deploy C:\Users\steve\Desktop\ai project\13 pet poll pic to Vercel as a preview`
+- `Deploy C:\Users\steve\Desktop\ai project\13 pet poll pic to Vercel production`
+- `Check whether this repo is ready for Vercel, then deploy a preview`
+
+### First-time Vercel setup
+
 1. Create a Vercel project from this repo.
-2. Add the same environment variables from `.env.local`.
-3. Deploy.
+2. Add the same environment variables from `.env.local` in Vercel Project Settings.
+3. Link or select the project the first time Codex deploys it through Vercel MCP.
 4. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
+
+### Required Vercel environment variables
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_BUCKET`
+- `ADMIN_PASSWORD`
+- `ADMIN_SESSION_SECRET`
+
+### After each deploy
+
+Check these routes:
+
+- `/`
+- `/admin/login`
+- `/cards`
+
+Also confirm the server-side routes still work with Supabase-backed data.
 
 ## Build and follow-up notes
 
