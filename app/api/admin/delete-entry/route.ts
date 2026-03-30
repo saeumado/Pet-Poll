@@ -7,14 +7,14 @@ export async function POST(request: Request) {
   const authed = await isAdminAuthenticated();
 
   if (!authed) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return new NextResponse("Unauthorized", { status: 401, headers: { "Cache-Control": "no-store" } });
   }
 
   const formData = await request.formData();
   const householdId = String(formData.get("householdId") ?? "").trim();
 
   if (!householdId) {
-    return new NextResponse("Missing household id.", { status: 400 });
+    return new NextResponse("Missing household id.", { status: 400, headers: { "Cache-Control": "no-store" } });
   }
 
   const supabase = createServerSupabaseClient();
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     .single();
 
   if (householdError || !household) {
-    return new NextResponse("Entry not found.", { status: 404 });
+    return new NextResponse("Entry not found.", { status: 404, headers: { "Cache-Control": "no-store" } });
   }
 
   const photoPaths = (household.dogs ?? [])
@@ -37,15 +37,15 @@ export async function POST(request: Request) {
     const { error: storageError } = await supabase.storage.from(bucket).remove(photoPaths);
 
     if (storageError) {
-      return new NextResponse("Failed to delete saved photos.", { status: 500 });
+      return new NextResponse("Failed to delete saved photos.", { status: 500, headers: { "Cache-Control": "no-store" } });
     }
   }
 
   const { error: deleteError } = await supabase.from("households").delete().eq("id", householdId);
 
   if (deleteError) {
-    return new NextResponse("Failed to delete entry.", { status: 500 });
+    return new NextResponse("Failed to delete entry.", { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 
-  return NextResponse.redirect(new URL("/admin", request.url), { status: 303 });
+  return NextResponse.redirect(new URL("/admin", request.url), { status: 303, headers: { "Cache-Control": "no-store" } });
 }

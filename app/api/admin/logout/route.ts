@@ -3,5 +3,10 @@ import { clearAdminSession } from "@/lib/admin-auth";
 
 export async function POST(request: Request) {
   await clearAdminSession();
-  return NextResponse.redirect(new URL("/admin/login", request.url));
+  return NextResponse.redirect(new URL("/admin/login", request.url), {
+    status: 303,
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  });
 }

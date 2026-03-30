@@ -134,6 +134,7 @@ export function SubmissionForm() {
         const raw = await response.text();
         let payload:
           | {
+              code?: string;
               dogCount?: number;
               error?: string;
               householdName?: string | null;
@@ -145,6 +146,7 @@ export function SubmissionForm() {
         if (raw) {
           try {
             payload = JSON.parse(raw) as {
+              code?: string;
               dogCount?: number;
               error?: string;
               householdName?: string | null;
@@ -157,12 +159,19 @@ export function SubmissionForm() {
         }
 
         if (!response.ok) {
+          const fallbackError =
+            response.status === 413
+              ? "That photo is too large. Please use a file under 4 MB."
+              : payload?.code === "missing_env"
+                ? "The server is missing a required setting. Please try again later."
+                : payload?.code === "upload_failed"
+                  ? "We couldn't upload that photo right now. Please try again."
+                  : payload?.code === "db_failed"
+                    ? "We couldn't save that entry right now. Please try again."
+                    : "We couldn't save that entry.";
+
           setState({
-            error:
-              payload?.error ??
-              (response.status === 413
-                ? "That photo is too large. Please use a file under 4 MB."
-                : "We couldn't save that entry."),
+            error: payload?.error ?? fallbackError,
             success: null,
           });
           return;

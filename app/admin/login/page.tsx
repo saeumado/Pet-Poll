@@ -1,10 +1,28 @@
+import type { Metadata } from "next";
+import { unstable_noStore as noStore } from "next/cache";
+
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
+
 export default async function AdminLoginPage(props: { searchParams: SearchParams }) {
+  noStore();
   const searchParams = await props.searchParams;
   const error = typeof searchParams.error === "string" ? searchParams.error : "";
+  const seconds = typeof searchParams.seconds === "string" ? Number(searchParams.seconds) : 0;
   const errorMessage =
-    error === "invalid" ? "That password didn't match the admin secret." : error === "missing" ? "Enter the admin password." : "";
+    error === "invalid"
+      ? "That password didn't match the admin secret."
+      : error === "missing"
+        ? "Enter the admin password."
+        : error === "locked"
+          ? `Too many failed attempts. Please wait ${seconds || 300} seconds and try again.`
+          : "";
 
   return (
     <main className="shell">

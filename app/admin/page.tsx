@@ -1,10 +1,19 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { unstable_noStore as noStore } from "next/cache";
 import { redirect } from "next/navigation";
 import { DeleteEntryButton } from "@/components/delete-entry-button";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { getServerEnv } from "@/lib/env";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { formatAdminHktDate } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 type HouseholdRecord = {
   id: string;
@@ -21,6 +30,8 @@ type HouseholdRecord = {
 };
 
 export default async function AdminPage() {
+  noStore();
+
   const authed = await isAdminAuthenticated();
 
   if (!authed) {
@@ -48,6 +59,7 @@ export default async function AdminPage() {
     for (const dog of entry.dogs) {
       if (!signedUrlCache.has(dog.storage_path)) {
         const { data: originalSigned } = await supabase.storage.from(bucket).createSignedUrl(dog.storage_path, 60 * 60);
+
         if (originalSigned?.signedUrl) {
           signedUrlCache.set(dog.storage_path, originalSigned.signedUrl);
         }

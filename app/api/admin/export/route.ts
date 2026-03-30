@@ -29,7 +29,7 @@ export async function GET() {
   const authed = await isAdminAuthenticated();
 
   if (!authed) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return new NextResponse("Unauthorized", { status: 401, headers: { "Cache-Control": "no-store" } });
   }
 
   const supabase = createServerSupabaseClient();
@@ -39,7 +39,7 @@ export async function GET() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    return new NextResponse("Failed to build export.", { status: 500 });
+    return new NextResponse("Failed to build export.", { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 
   const rows = [["Household", "Dachshund Count", "Submitted At", "Dog Name", "Photo Path", "Original File Name", "Content Type"]];
@@ -63,6 +63,7 @@ export async function GET() {
   return new NextResponse(csv, {
     status: 200,
     headers: {
+      "Cache-Control": "no-store",
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": 'attachment; filename="dachshund-submissions.csv"',
     },
