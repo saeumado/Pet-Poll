@@ -3,6 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { unstable_noStore as noStore } from "next/cache";
 import { redirect } from "next/navigation";
+import { DeleteGalleryCardButton } from "@/components/delete-gallery-card-button";
+import { GalleryUploadForm } from "@/components/gallery-upload-form";
 import { DeleteEntryButton } from "@/components/delete-entry-button";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { getServerEnv } from "@/lib/env";
@@ -195,37 +197,12 @@ function GalleryManager({
         <div>
           <h2 className="pageTitle">Gallery manager</h2>
           <p className="sectionText">
-            Upload many finished card images at once. New uploads appear on the public gallery in the order they were added.
+            Upload many finished card images at once. Newest uploads appear first on the public gallery.
           </p>
         </div>
       </div>
 
-      {searchParams?.gallerySuccess ? <p className="successText">{searchParams.gallerySuccess}</p> : null}
-      {searchParams?.galleryError ? <p className="errorText">{searchParams.galleryError}</p> : null}
-
-      <form className="galleryAdminForm" action="/api/admin/gallery" method="post" encType="multipart/form-data">
-        <input type="hidden" name="intent" value="create" />
-
-        <label className="field">
-          <span className="label">Gallery images</span>
-          <input className="input" name="files" type="file" accept="image/png,image/jpeg,image/webp" multiple required />
-          <span className="hint">Choose one or many final JPG, PNG, or WebP card images. Each filename becomes the card name automatically.</span>
-        </label>
-
-        <label className="field">
-          <span className="label">Visibility</span>
-          <select className="input" name="isPublished" defaultValue="true">
-            <option value="true">Published</option>
-            <option value="false">Hidden</option>
-          </select>
-        </label>
-
-        <div className="buttonRow">
-          <button className="button" type="submit">
-            Upload gallery cards
-          </button>
-        </div>
-      </form>
+      <GalleryUploadForm initialError={searchParams?.galleryError} initialSuccess={searchParams?.gallerySuccess} />
 
       <div className="divider" />
 
@@ -279,6 +256,7 @@ function GalleryManager({
                   <Link className="linkButton" href={card.downloadHref}>
                     Download
                   </Link>
+                  <DeleteGalleryCardButton cardId={card.id} cardName={card.name} />
                 </div>
               </form>
             </article>

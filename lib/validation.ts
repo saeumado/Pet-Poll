@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const MAX_FILE_SIZE = 4 * 1024 * 1024;
+export const MAX_GALLERY_UPLOAD_TOTAL_SIZE = Math.floor(3.5 * 1024 * 1024);
 
 export const adminLoginSchema = z.object({
   password: z.string().min(1, "Enter the admin password."),
@@ -47,17 +48,21 @@ export const adminPhotoSchema = z.object({
   path: z.string().min(1, "Missing photo path."),
 });
 
+const galleryCardFileSchema = z
+  .instanceof(File)
+  .refine((file) => file.size > 0, "Choose an image to upload.")
+  .refine((file) => file.size <= MAX_FILE_SIZE, "Each image must be 4 MB or smaller.")
+  .refine((file) => ACCEPTED_TYPES.includes(file.type), "Images must be JPG, PNG, or WebP.");
+
 export const galleryCardUploadSchema = z.object({
   isPublished: z.boolean(),
   files: z
-    .array(
-      z
-        .instanceof(File)
-        .refine((file) => file.size > 0, "Choose an image to upload.")
-        .refine((file) => file.size <= MAX_FILE_SIZE, "Each image must be 4 MB or smaller.")
-        .refine((file) => ACCEPTED_TYPES.includes(file.type), "Images must be JPG, PNG, or WebP."),
-    )
-    .min(1, "Choose at least one image to upload."),
+    .array(galleryCardFileSchema)
+    .min(1, "Choose at least one image to upload.")
+    .refine(
+      (files) => files.reduce((total, file) => total + file.size, 0) <= MAX_GALLERY_UPLOAD_TOTAL_SIZE,
+      "Those images are too large together. Upload fewer or smaller files.",
+    ),
 });
 
 export const galleryCardUpdateSchema = z.object({
@@ -68,4 +73,8 @@ export const galleryCardUpdateSchema = z.object({
     .min(1, "Enter a card name.")
     .max(80, "Card names must stay under 80 characters."),
   isPublished: z.boolean(),
+});
+
+export const galleryCardDeleteSchema = z.object({
+  cardId: z.string().uuid("Invalid gallery card id."),
 });

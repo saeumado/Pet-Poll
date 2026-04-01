@@ -3,6 +3,10 @@ import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { createGalleryCards, updateGalleryCard } from "@/lib/gallery-cards";
 import { galleryCardUpdateSchema, galleryCardUploadSchema } from "@/lib/validation";
 
+function expectsJson(request: Request) {
+  return request.headers.get("accept")?.includes("application/json") ?? false;
+}
+
 function redirectToAdmin(request: Request, params: Record<string, string>) {
   const url = new URL("/admin", request.url);
 
@@ -18,10 +22,27 @@ function redirectToAdmin(request: Request, params: Record<string, string>) {
   });
 }
 
+function respondWithMessage(
+  request: Request,
+  type: "error" | "success",
+  message: string,
+  status = 200,
+) {
+  if (expectsJson(request)) {
+    return NextResponse.json({ [type]: message }, { status, headers: { "Cache-Control": "no-store" } });
+  }
+
+  return redirectToAdmin(request, type === "error" ? { galleryError: message } : { gallerySuccess: message });
+}
+
 export async function POST(request: Request) {
   const authed = await isAdminAuthenticated();
 
   if (!authed) {
+    if (expectsJson(request)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+    }
+
     return new NextResponse("Unauthorized", { status: 401, headers: { "Cache-Control": "no-store" } });
   }
 
@@ -37,12 +58,12 @@ export async function POST(request: Request) {
 
       if (!parsed.success) {
         const message = parsed.error.issues[0]?.message ?? "Could not validate the gallery upload.";
-        return redirectToAdmin(request, { galleryError: message });
+        return respondWithMessage(request, "error", message, 400);
       }
 
       await createGalleryCards(parsed.data);
 
-      return redirectToAdmin(request, { gallerySuccess: `${parsed.data.files.length} gallery card(s) uploaded.` });
+      return respondWithMessage(request, "success", `${parsed.data.files.length} gallery card(s) uploaded.`);
     }
 
     if (intent === "update") {
@@ -54,19 +75,17 @@ export async function POST(request: Request) {
 
       if (!parsed.success) {
         const message = parsed.error.issues[0]?.message ?? "Could not validate the gallery update.";
-        return redirectToAdmin(request, { galleryError: message });
+        return respondWithMessage(request, "error", message, 400);
       }
 
       await updateGalleryCard(parsed.data);
 
-      return redirectToAdmin(request, { gallerySuccess: "Gallery card updated." });
+      return respondWithMessage(request, "success", "Gallery card updated.");
     }
 
-    return redirectToAdmin(request, { galleryError: "Unknown gallery action." });
+    return respondWithMessage(request, "error", "Unknown gallery action.", 400);
   } catch (error) {
     console.error("[admin-gallery] request_failed", error);
-    return redirectToAdmin(request, {
-      galleryError: "We couldn't save that gallery change right now. Please try again.",
-    });
+    return respondWithMessage(request, "error", "We couldn't save that gallery change right now. Please try again.", 500);
   }
 }

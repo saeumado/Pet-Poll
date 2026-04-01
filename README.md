@@ -164,6 +164,12 @@ npm.cmd run dev
 
 This repo is intended to be deployed with the Vercel MCP from Codex chat.
 
+Important deployment rule:
+
+- the live gallery is persistent Supabase data, not Vercel build output
+- existing gallery cards and uploaded images are preserved across normal Vercel deploys
+- the main way to accidentally lose the gallery is to change production env vars, point at a different Supabase project or bucket, or run destructive SQL
+
 ### Default deploy workflow
 
 Use preview deployments by default. Only deploy to production when you explicitly want the live site updated.
@@ -210,6 +216,16 @@ Check these routes:
 - `/cards`
 
 Also confirm the server-side routes still work with Supabase-backed data.
+
+### Safe gallery-preserving rollout
+
+When shipping a new feature without losing the existing gallery:
+
+1. Keep production using the same `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_BUCKET`.
+2. Use a preview deployment first.
+3. If schema changes are needed, make them additive and backward compatible with existing `gallery_cards` rows and stored image paths.
+4. Verify in preview that old gallery cards still load on `/cards`.
+5. Only then promote to production.
 
 ## Build and follow-up notes
 
