@@ -130,7 +130,7 @@ export async function listPublishedGalleryCards(voterToken?: string | null) {
     .from("gallery_cards")
     .select("id, name, image_path, sort_order, is_published, created_at")
     .eq("is_published", true)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(`Failed to load gallery cards: ${error.message}`);
@@ -163,7 +163,7 @@ export async function listAdminGalleryCards() {
   const { data, error } = await supabase
     .from("gallery_cards")
     .select("id, name, image_path, sort_order, is_published, created_at")
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(`Failed to load admin gallery cards: ${error.message}`);
@@ -248,6 +248,21 @@ export async function getPublishedGalleryCardById(cardId: string) {
 
   if (error) {
     throw new Error(`Failed to load gallery card: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function getAdminGalleryCardById(cardId: string) {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("gallery_cards")
+    .select("id, name, image_path, is_published")
+    .eq("id", cardId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load admin gallery card: ${error.message}`);
   }
 
   return data;

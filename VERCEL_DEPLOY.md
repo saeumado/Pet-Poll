@@ -2,6 +2,22 @@
 
 This project should be deployed from Codex using the Vercel MCP tools.
 
+## Gallery safety
+
+The live gallery is not stored in the Vercel deployment itself.
+
+- `public.gallery_cards` in Supabase stores gallery metadata
+- `public.gallery_card_votes` in Supabase stores likes
+- Supabase Storage stores uploaded dog photos and gallery assets
+
+That means a normal Vercel deploy does not delete the existing gallery. The real risks are:
+
+- changing `NEXT_PUBLIC_SUPABASE_URL`
+- changing `SUPABASE_BUCKET`
+- pointing production at a different Supabase project
+- running destructive SQL such as `drop table`, `truncate`, or bucket replacement
+- changing how `image_path` is interpreted without migrating old rows
+
 ## Default rule
 
 - Use preview deployments by default
@@ -44,6 +60,36 @@ These values match [`.env.example`](/C:/Users/steve/Desktop/ai%20project/13%20pe
 Important:
 
 - `SUPABASE_SERVICE_ROLE_KEY` must remain server-only
+- keep production pointing at the same Supabase project and bucket unless you intentionally want a fresh empty gallery
+
+## Safe rollout checklist
+
+For any new feature that must keep the current gallery:
+
+1. Build the change on a branch.
+2. Keep the current production Vercel env vars unchanged:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `SUPABASE_BUCKET`
+3. If the feature needs database changes, use additive SQL only:
+   - `alter table ... add column ...`
+   - `create table if not exists ...`
+   - `create index if not exists ...`
+4. Preserve compatibility with existing gallery rows:
+   - keep reading from `gallery_cards`
+   - keep signed URL generation working for existing `image_path` values
+   - make new fields optional or defaulted so old rows still render
+5. Deploy a Vercel preview first.
+6. Verify the preview against the existing Supabase data.
+7. Merge to `main` and let Vercel deploy production.
+
+Avoid these rollout mistakes unless you are also doing a deliberate data migration:
+
+- do not create a new Vercel project for production
+- do not point production at a new Supabase project
+- do not rename or remove columns that current routes still read
+- do not replace the storage bucket or rewrite `image_path` semantics in place
 
 ## What to verify after deploy
 
@@ -52,3 +98,5 @@ Important:
 - `/admin/login` loads
 - `/cards` loads
 - server-side routes still work with Supabase-backed data
+- existing gallery cards still render with images and downloads
+- if you upload a new gallery card from admin, both old and new cards appear together
